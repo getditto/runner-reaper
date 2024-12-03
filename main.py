@@ -45,10 +45,20 @@ if os.environ.get("DRY_RUN") is None:
 else:
     dry_run = True
 
+if os.environ.get("PER_PAGE") is None:
+    per_page = 30
+else:
+    per_page = os.environ.get("PER_PAGE")
+
 if os.environ.get("FUZZY_NAME") is None:
     substring = ""
 else:
     substring = os.environ.get("FUZZY_NAME")
+
+if os.environ.get("RUNNER_MISMATCH_CHECK") is None:
+    runner_mismatch_check = False
+else:
+    runner_mismatch_check = True
 
 # Define functions
 def set_url(api_endpoint, runner_scope, scope_name):
@@ -67,25 +77,32 @@ def set_url(api_endpoint, runner_scope, scope_name):
     return base_url
 
 
-def get_runners(base_url, headers):
+def get_runners(base_url, per_page, headers):
     """
     Get the list of runners
     """
     # Get the list of runners
-    response = requests.get(base_url, headers=headers)
+    response = requests.get("{}?per_page={}".format(base_url,per_page), headers=headers)
     if response.status_code == 404:
         print("No runners found for {}".format(scope_name))
         print("Perhaps check the PAT permissions?")
         return []
     runner_count = response.json()["total_count"]
     runner_list = response.json()["runners"]
+    j = 1
+    print("Getting Runners")
     while "next" in response.links.keys():
         response = requests.get(response.links["next"]["url"], headers=headers)
         for i in response.json()["runners"]:
             runner_list.append(i)
+        j += 1
+
+    print("Total Runners {}".format(runner_count))
+    print("Runners List Count {}".format(len(runner_list)))
 
     # Make sure we have the right number of runners
-    assert len(runner_list) == runner_count, "Runner count mismatch"
+    if runner_mismatch_check:
+        assert len(runner_list) == runner_count, "Runner count mismatch"
 
     # Return the list of runners
     return runner_list
@@ -95,7 +112,9 @@ def delete_runners(base_url, headers, runner_list, dry_run, substring):
     """
     Delete the offline runners
     """
+    print("Deleting Runners")
     for i in runner_list:
+        print("Checking runner {}".format(i["name"]))
         if i["status"] == "offline" and substring in i["name"] and dry_run == False:
             url = base_url + "/{}".format(i["id"])
             response = requests.delete(url, headers=headers)
@@ -113,5 +132,5 @@ if __name__ == "__main__":
         "Accept": "application/vnd.github.v3+json",
     }
     base_url = set_url(api_endpoint, runner_scope, scope_name)
-    runner_list = get_runners(base_url, headers)
+    runner_list = get_runners(base_url, per_page, headers)
     delete_runners(base_url, headers, runner_list, dry_run, substring)
