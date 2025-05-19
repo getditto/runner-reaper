@@ -18,6 +18,7 @@ Outputs:
 import requests
 import os
 import sys
+import json
 
 # Read in config values
 if os.environ.get("GITHUB_API_ENDPOINT") is None:
@@ -87,6 +88,9 @@ def get_runners(base_url, per_page, headers):
         print("No runners found for {}".format(scope_name))
         print("Perhaps check the PAT permissions?")
         return []
+    if not (200 <= response.status_code <= 299):
+        print("Connection issue: {}".format(response.json()["message"]))
+        return []
     runner_count = response.json()["total_count"]
     runner_list = response.json()["runners"]
     j = 1
@@ -133,4 +137,6 @@ if __name__ == "__main__":
     }
     base_url = set_url(api_endpoint, runner_scope, scope_name)
     runner_list = get_runners(base_url, per_page, headers)
+    if len(runner_list) == 0:
+        exit(1)
     delete_runners(base_url, headers, runner_list, dry_run, substring)
